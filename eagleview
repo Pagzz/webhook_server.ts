@@ -4,20 +4,19 @@ export default Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
   const body = await req.json();
-  console.log("[Webhook] Received:", JSON.stringify(body, null, 2));
+  console.log("[Webhook] EagleView callback received:", JSON.stringify(body, null, 2));
 
   const base44 = createClientFromRequest(req);
-
-  // Use whatever property ID reference EagleView provides
   const propertyId = body.propertyId || body.request?.customId;
 
   if (propertyId) {
     await base44.entities.Property.update(propertyId, {
       enrichment_status: "complete",
       eagleview_order_status: "Completed",
-      eagleview_report: body,
+      eagleview_report: body, // full EagleView payload
       last_enrichment_date: new Date().toISOString()
     });
+    console.log(`[Webhook] Property ${propertyId} updated with full EagleView report`);
   }
 
   return new Response(JSON.stringify({ success: true }));
