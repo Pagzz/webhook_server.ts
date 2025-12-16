@@ -1,23 +1,39 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 export default Deno.serve(async (req) => {
-  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+  try {
+    // For EagleView, payload is usually JSON
+    const body = await req.json();
+    console.log("[Webhook] Received:", JSON.stringify(body, null, 2));
 
-  const body = await req.json();
-  console.log("[Webhook] EagleView callback received:", JSON.stringify(body, null, 2));
+    const requestId = body.id || body.request?.id;
+    const status = body.status || body.request?.status;
 
-  const base44 = createClientFromRequest(req);
-  const propertyId = body.propertyId || body.request?.customId;
+    if (!requestId || !status) {
+      return Response.json({ error: "Invalid payload" }, { status: 400 });
+    }
 
-  if (propertyId) {
-    await base44.entities.Property.update(propertyId, {
-      enrichment_status: "complete",
-      eagleview_order_status: "Completed",
-      eagleview_report: body, // full EagleView payload
+    // Connect to Base44
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Find property by requestId (assuming you stored it in eagleview_report.requestId)
+    const [property] = await base44.entities.Property.filter({ "eagleview_report.requestId": requestId });
+    if (!property) return Response.json({ error: "Property not found" }, { status: 404 });
+
+    // Update property with webhook data
+    await base44.entities.Property.update(property.id, {
+      eagleview_report: body,
+      eagleview_order_status: status,
+      enrichment_status: status.toLowerCase() === "complete" ? "complete" : "submitted",
       last_enrichment_date: new Date().toISOString()
     });
-    console.log(`[Webhook] Property ${propertyId} updated with full EagleView report`);
-  }
 
-  return new Response(JSON.stringify({ success: true }));
+    console.log(`[Webhook] Updated property ${property.id} with request ${requestId}`);
+    return Response.json({ success: true });
+  } catch (err) {
+    console.error("[Webhook] Error:", err);
+    return Response.json({ error: err.message }, { status: 500 });
+  }
 });
