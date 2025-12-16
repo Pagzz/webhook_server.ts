@@ -1,0 +1,24 @@
+/* ============================================================
+   EagleView Webhook Server (Deno)
+============================================================ */
+
+import { serve } from "https://deno.land/std@0.201.0/http/server.ts";
+
+serve(async (req) => {
+  try {
+    if (req.method !== "POST") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
+    const body = await req.json();
+    console.log("[EagleView Webhook] Received data:", JSON.stringify(body, null, 2));
+
+    // TODO: Process data here (e.g., save to database or Base44)
+    // Example: await saveToBase44(body);
+
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+  } catch (err) {
+    console.error("[Webhook Error]", err);
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500 });
+  }
+});
